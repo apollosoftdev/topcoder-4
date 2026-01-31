@@ -44,7 +44,7 @@ topcoder-4/
 ├── infrastructure/         # CDK infrastructure code
 │   ├── app.py
 │   ├── mm_processor_stack.py
-│   ├── constructs/
+│   ├── mm_constructs/
 │   │   ├── router_lambda.py
 │   │   ├── fanout.py
 │   │   ├── challenge_processor.py

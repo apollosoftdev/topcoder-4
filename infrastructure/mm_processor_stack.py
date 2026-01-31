@@ -3,10 +3,12 @@ from aws_cdk import Stack
 from aws_cdk import aws_ec2 as ec2
 from constructs import Construct
 
-from constructs.router_lambda import RouterLambda
-from constructs.fanout import FanoutConstruct
-from constructs.challenge_processor import ChallengeProcessor
-from constructs.completion_handler import CompletionHandler
+from mm_constructs import (
+    RouterLambda,
+    FanoutConstruct,
+    ChallengeProcessor,
+    CompletionHandler
+)
 
 
 class MmProcessorStack(Stack):
