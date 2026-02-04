@@ -337,12 +337,15 @@ If not tagged, CDK's `Vpc.fromLookup()` may not find them correctly.
 
 ## Environment Variable Reference
 
+### Core Configuration
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `EXISTING_MSK_CLUSTER_ARN` | No | - | ARN of existing MSK cluster. If set, no new MSK created. |
 | `EXISTING_VPC_ID` | No | - | VPC ID of existing VPC. If set, no new VPC created. |
 | `EXISTING_PRIVATE_SUBNET_IDS` | No | - | Comma-separated private subnet IDs. If not set, auto-discovered from VPC. |
 | `EXISTING_SECURITY_GROUP_IDS` | No | - | Comma-separated security group IDs for Lambda/ECS. |
+| `EXISTING_LAMBDA_ROLE_ARN` | No | - | ARN of existing Lambda execution role. |
 | `AUTH0_CLIENT_ID` | **Yes** | - | Auth0 M2M client ID |
 | `AUTH0_CLIENT_SECRET` | **Yes** | - | Auth0 M2M client secret |
 | `MSK_CLUSTER_NAME` | No | `match-scorer` | Name for new MSK cluster (ignored if using existing) |
@@ -354,6 +357,37 @@ If not tagged, CDK's `Vpc.fromLookup()` may not find them correctly.
 | `REVIEW_SCORECARD_ID` | No | `30001852` | Review scorecard ID |
 | `REVIEW_TYPE_NAME` | No | `MMScorer` | Review type name |
 | `LOG_LEVEL` | No | `debug` | Log level (debug, info, warn, error) |
+
+### Fan-Out Architecture Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SNS_TOPIC_NAME` | No | `submission-fanout-topic` | SNS topic name for fan-out |
+| `CHALLENGE_MAPPING_TABLE_NAME` | No | `challenge-queue-mapping` | DynamoDB table name |
+| `ECS_TASK_STATE_RULE_NAME` | No | `ecs-task-state-change-rule` | EventBridge rule name |
+| `SQS_VISIBILITY_TIMEOUT_SECONDS` | No | `120` | SQS message visibility timeout |
+| `SQS_MESSAGE_RETENTION_DAYS` | No | `7` | Main queue message retention |
+| `SQS_MAX_RECEIVE_COUNT` | No | `3` | Max receives before DLQ |
+| `DLQ_RETENTION_DAYS` | No | `14` | DLQ message retention |
+| `CHALLENGES` | No | See config.ts | JSON array of challenge configs |
+
+### Challenge Configuration Format
+
+The `CHALLENGES` environment variable accepts a JSON array:
+
+```json
+[
+  {
+    "challengeId": "uuid-of-challenge",
+    "challengeName": "HumanReadableName"
+  }
+]
+```
+
+Example:
+```bash
+export CHALLENGES='[{"challengeId":"bd958f96-1c76-436a-9daa-8627426b1820","challengeName":"BioSlime"}]'
+```
 
 ---
 

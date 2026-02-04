@@ -22,22 +22,31 @@ Complete guide for deploying the Match Scorer application to AWS using AWS CDK.
 
 ## Architecture Overview
 
-The Match Scorer system consists of:
+The Match Scorer system uses a **fan-out architecture** for scalable, per-challenge processing:
 
 - **VPC**: Custom VPC with public and private subnets across 2 AZs
-- **MSK Cluster**: Managed Kafka cluster (2 brokers) for submission event streaming
+- **MSK Cluster**: Managed Kafka cluster for submission event streaming
+- **SNS Topic**: Fan-out hub for submission messages
+- **SQS Queues**: Per-challenge queues with dead-letter queues
+- **DynamoDB**: Challenge-to-queue mapping table
 - **ECS Fargate**: Container service running Java scoring engine
 - **ECR**: Docker image repository for scorer container
 - **Lambda Functions**:
-  - `SubmissionWatcherLambda`: Kafka consumer that triggers ECS scoring tasks
+  - `RouterLambda`: MSK → SNS router with validation
+  - `ChallengeProcessor-{Name}`: SQS → ECS launcher (one per challenge)
+  - `CompletionLambda`: EventBridge → CloudWatch task completion handler
+  - `SubmissionWatcherLambda`: Legacy direct MSK → ECS (kept for reference)
+- **EventBridge**: ECS task state change rules
 - **CloudWatch Logs**: Centralized logging for all services
 - **SSM Parameter Store**: Configuration management for challenges and scorers
 
-**Data Flow**:
+**Data Flow (Fan-Out)**:
 ```
-Kafka Topic → SubmissionWatcherLambda → ECS Fargate Task → Topcoder API
-                                             ↓
-                                      CloudWatch Logs
+MSK → Router Lambda → SNS Topic → SQS Queues → Challenge Lambdas → ECS Tasks
+                          ↓                                           ↓
+                     DynamoDB                                   EventBridge
+                    (validation)                                     ↓
+                                                            Completion Lambda
 ```
 
 ---
@@ -213,15 +222,16 @@ cd mm-new-scorer/codebase/cdk
 ### 2. Install Dependencies
 
 ```bash
-# Install CDK dependencies
+# From project root - installs all workspaces
 npm install
 
-# Install Lambda dependencies
-cd ../submission-watcher-lambda
-npm install
-cd ../test-data-sender-lambda
-npm install
-cd ../cdk
+# This installs dependencies for:
+# - cdk/
+# - router-lambda/
+# - challenge-processor-lambda/
+# - completion-lambda/
+# - submission-watcher-lambda/
+# - test-data-sender-lambda/
 ```
 
 ### 3. Configure Environment Variables
@@ -289,6 +299,18 @@ export MAX_RETRIES="3"
 
 # Logging
 export LOG_LEVEL="debug"
+
+# Fan-Out Architecture Configuration
+export SNS_TOPIC_NAME="submission-fanout-topic"
+export CHALLENGE_MAPPING_TABLE_NAME="challenge-queue-mapping"
+export ECS_TASK_STATE_RULE_NAME="ecs-task-state-change-rule"
+export SQS_VISIBILITY_TIMEOUT_SECONDS="120"
+export SQS_MESSAGE_RETENTION_DAYS="7"
+export SQS_MAX_RECEIVE_COUNT="3"
+export DLQ_RETENTION_DAYS="14"
+
+# Challenge Configuration (JSON array)
+export CHALLENGES='[{"challengeId":"your-challenge-uuid","challengeName":"YourChallenge"}]'
 ```
 
 ### 4. Environment-Specific Configuration
@@ -404,9 +426,38 @@ MatchScorerStack.EcsTaskDefinitionArn = arn:aws:ecs:us-east-1:123456789012:task-
 MatchScorerStack.WatcherLambdaFunctionArn = arn:aws:lambda:us-east-1:123456789012:function:SubmissionWatcherLambda
 MatchScorerStack.EcrRepositoryUri = 123456789012.dkr.ecr.us-east-1.amazonaws.com/cdk-hnb659fds-container-assets-...
 MatchScorerStack.MskClusterArnOutput = arn:aws:kafka:us-east-1:123456789012:cluster/match-scorer/...
+
+# Fan-Out Architecture Outputs:
+MatchScorerStack.DynamoDbTableName = challenge-queue-mapping
+MatchScorerStack.SnsTopicArn = arn:aws:sns:us-east-1:123456789012:submission-fanout-topic
+MatchScorerStack.RouterLambdaFunctionArn = arn:aws:lambda:us-east-1:123456789012:function:RouterLambda
+MatchScorerStack.CompletionLambdaFunctionArn = arn:aws:lambda:us-east-1:123456789012:function:CompletionLambda
+MatchScorerStack.EventBridgeRuleName = ecs-task-state-change-rule
+MatchScorerStack.DynamoDBSeedCommand = aws dynamodb put-item ...
 ```
 
 **💡 TIP**: Save these outputs for troubleshooting and operations.
+
+### 6. Seed DynamoDB Table
+
+After deployment, seed the DynamoDB table with challenge-queue mappings:
+
+```bash
+# Use the DynamoDBSeedCommand from stack outputs, or manually:
+aws dynamodb put-item \
+  --table-name challenge-queue-mapping \
+  --item '{
+    "challengeId": {"S": "your-challenge-uuid"},
+    "queueUrl": {"S": "https://sqs.us-east-1.amazonaws.com/123456789012/challenge-yourchallenge-queue"},
+    "queueArn": {"S": "arn:aws:sqs:us-east-1:123456789012:challenge-yourchallenge-queue"},
+    "dlqUrl": {"S": "https://sqs.us-east-1.amazonaws.com/123456789012/challenge-yourchallenge-dlq"},
+    "challengeName": {"S": "YourChallenge"},
+    "active": {"BOOL": true},
+    "createdAt": {"S": "2024-01-01T00:00:00Z"},
+    "updatedAt": {"S": "2024-01-01T00:00:00Z"}
+  }' \
+  --region us-east-1
+```
 
 ---
 

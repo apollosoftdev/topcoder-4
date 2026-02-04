@@ -5,27 +5,45 @@ A service to fetch and score submissions. This service processes match submissio
 ## Project Structure
 
 ```
-lambda-poc-tc/         # Root directory
-├── cdk/                 # CDK infrastructure code (Stack, Constructs, Config)
-│   ├── lib/             # CDK Constructs and Stack definition
-│   ├── bin/             # CDK entry point
-│   ├── cdk.json         # CDK config
-│   └── ...
-├── submission-watcher-lambda/ # Lambda code that triggers ECS task from MSK
+match-scorer/              # Root directory
+├── cdk/                   # CDK infrastructure code (Stack, Constructs, Config)
+│   ├── lib/               # CDK Constructs and Stack definition
+│   │   ├── config.ts              # Configuration (env vars, challenges)
+│   │   ├── match-scorer-cdk-stack.ts  # Main stack
+│   │   ├── lambda-constructs.ts   # All Lambda constructs
+│   │   ├── dynamodb-construct.ts  # DynamoDB table
+│   │   ├── sns-sqs-construct.ts   # SNS/SQS fan-out
+│   │   ├── eventbridge-construct.ts # EventBridge rules
+│   │   ├── ecs-construct.ts       # ECS cluster/task
+│   │   ├── msk-construct.ts       # MSK cluster
+│   │   └── vpc-construct.ts       # VPC
+│   ├── bin/               # CDK entry point
+│   └── cdk.json           # CDK config
+├── router-lambda/         # MSK → SNS router (fan-out entry point)
 │   ├── index.js
 │   └── package.json
-├── java-scorer/     # ECS task application code (the scorer)
-│   ├── src
-│   ├── Dockerfile       # Docker image definition
-│   └── package.json
-├── test-data-sender-lambda/ # Lambda code to send test messages to MSK
+├── challenge-processor-lambda/  # SQS → ECS launcher (one per challenge)
 │   ├── index.js
 │   └── package.json
-├── doc/                 # Documentation assets
-│   └── aws-cloud.png    # Architecture image
-├── architecture.md      # Architecture documentation
-├── README.md            # This file
-├── .gitignore
+├── completion-lambda/     # EventBridge → CloudWatch (task completion)
+│   ├── index.js
+│   └── package.json
+├── submission-watcher-lambda/   # Legacy: direct MSK → ECS (kept for reference)
+│   ├── index.js
+│   └── package.json
+├── java-scorer/           # ECS task application code (the scorer)
+│   ├── src/
+│   ├── Dockerfile
+│   └── pom.xml
+├── test-data-sender-lambda/     # Lambda to send test messages to MSK
+│   ├── index.js
+│   └── package.json
+├── doc/                   # Documentation assets
+├── architecture.md        # Architecture documentation
+├── DEPLOYMENT.md          # Deployment guide
+├── INFRASTRUCTURE_CONFIG.md # Infrastructure configuration
+├── package.json           # Root package.json (npm workspaces)
+└── README.md              # This file
 ```
 
 ## Quick Start Guide
@@ -70,43 +88,35 @@ npm install -g aws-cdk
 
 ### 2. Deploy Infrastructure
 
-The AWS CDK (Cloud Development Kit) is configured to handle building the necessary components (like the Docker image for the ECS task and packaging Lambda code) and deploying all required AWS resources. Simply follow the steps below using the CDK CLI commands.
+The AWS CDK (Cloud Development Kit) is configured to handle building the necessary components (like the Docker image for the ECS task and packaging Lambda code) and deploying all required AWS resources.
 
 **Important Note on Auth0 M2M Token:**
 
-The `ACCESS_TOKEN` used by the Scorer ECS Task is now obtained dynamically at runtime via an Auth0 Machine-to-Machine (M2M) client credentials flow through an Auth0 proxy endpoint. No static tokens or `cdk/access_token.json` are used anymore.
-Provide the following environment variables (or override them in `cdk/lib/config.ts`) before deploying so the Lambda can fetch tokens at runtime:
-- `AUTH0_URL` (e.g., `https://topcoder-dev.auth0.com/oauth/token`)
-- `AUTH0_AUDIENCE` (e.g., `https://m2m.topcoder-dev.com/`)
-- `AUTH0_CLIENT_ID`
-- `AUTH0_CLIENT_SECRET`
-- `AUTH0_PROXY_URL` (proxy endpoint the Lambda calls to obtain a token)
-The Lambda will request an access token when launching the ECS task and inject it into the task as the `ACCESS_TOKEN` environment variable.
+The `ACCESS_TOKEN` used by the Scorer ECS Task is obtained dynamically at runtime via Auth0 M2M flow. Provide these environment variables before deploying:
+- `AUTH0_URL`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_PROXY_URL`
 
 ```bash
-# Install dependencies
-cd cdk
+# Install all dependencies (from root directory)
 npm install
+
+# Build CDK
 npm run build
 
 # Bootstrap CDK (one-time setup per AWS account/region)
-# This provisions necessary resources for CDK deployments.
-# If using a specific profile, add -- --profile YOUR_PROFILE_NAME
-npm run bootstrap 
+cd cdk && npm run bootstrap && cd ..
 
 # Deploy the stack
-# If using a specific profile, add -- --profile YOUR_PROFILE_NAME
 npm run deploy
 
-# NOTE: The initial deployment can take a significant amount of time (potentially up to 30 minutes)
-# primarily due to the creation of the MSK Kafka cluster. 
-# You can monitor the deployment progress in the AWS CloudFormation console in your selected region.
+# NOTE: Initial deployment can take up to 30 minutes due to MSK cluster creation.
 
-# To use a specific AWS profile for deployment (after bootstrapping):
-# npm run deploy -- --profile YOUR_PROFILE_NAME
-# OR set the environment variable:
-# AWS_PROFILE=YOUR_PROFILE_NAME npm run deploy
-
+# Other useful commands (run from root):
+npm run synth      # Synthesize CloudFormation template
+npm run diff       # Preview changes before deploying
+npm run destroy    # Remove all resources
+npm run test       # Run tests
+npm run lint       # Lint TypeScript code
+npm run lint:fix   # Fix linting issues
 ```
 
 It will take a while to deploy (up to 30 mins), and the cli might get stuck. So confirm a cloudformation stack is created.
