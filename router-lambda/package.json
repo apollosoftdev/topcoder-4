@@ -4,11 +4,15 @@
   "description": "MSK to SNS router Lambda for fan-out architecture",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "aws-sdk-client-mock": "^3.0.0"
   },
   "engines": {
     "node": ">=20.0.0"
