@@ -1,0 +1,45 @@
+{
+  "name": "topcoder-marathon-match-processor",
+  "version": "1.0.0",
+  "description": "Topcoder Marathon Match Processor with fan-out architecture",
+  "private": true,
+  "workspaces": [
+    "cdk",
+    "router-lambda",
+    "challenge-processor-lambda",
+    "completion-lambda",
+    "submission-watcher-lambda",
+    "test-data-sender-lambda"
+  ],
+  "scripts": {
+    "build": "npm run build -w cdk",
+    "build:cdk": "npm run build -w cdk",
+    "synth": "npm run synth -w cdk",
+    "deploy": "npm run deploy -w cdk",
+    "destroy": "npm run destroy -w cdk",
+    "diff": "npm run diff -w cdk",
+    "test": "npm run test -w cdk",
+    "lint": "npm run lint -w cdk",
+    "clean": "rm -rf node_modules */node_modules */*/node_modules",
+    "clean:install": "npm run clean && npm install"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/topcoder/marathon-match-processor"
+  },
+  "keywords": [
+    "topcoder",
+    "marathon-match",
+    "aws",
+    "cdk",
+    "lambda",
+    "ecs",
+    "sns",
+    "sqs"
+  ],
+  "author": "Topcoder",
+  "license": "MIT"
+}

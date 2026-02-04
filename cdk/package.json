@@ -8,10 +8,13 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
+    "lint": "tsc --noEmit",
     "cdk": "cdk",
     "bootstrap": "cdk bootstrap",
+    "synth": "cdk synth",
     "deploy": "cdk deploy",
-    "destroy": "cdk destroy"
+    "destroy": "cdk destroy",
+    "diff": "cdk diff"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
