@@ -20,6 +20,7 @@
     "diff": "npm run diff -w cdk",
     "test": "npm run test -w cdk",
     "lint": "npm run lint -w cdk",
+    "lint:fix": "npm run lint:fix -w cdk",
     "clean": "rm -rf node_modules */node_modules */*/node_modules",
     "clean:install": "npm run clean && npm install"
   },

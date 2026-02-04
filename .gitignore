@@ -1,7 +1,7 @@
 .DS_Store
 codealike.json
 
-*/node_modules
+node_modules
 java-scorer/target
 
 cdk/cdk.out
