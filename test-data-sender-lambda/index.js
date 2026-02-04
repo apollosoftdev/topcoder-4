@@ -63,7 +63,7 @@ const initializeKafka = async () => {
     if (error.code === 36) {
       console.log(`Topic '${topic}' already exists.`);
     } else {
-      console.error(`Failed to create topic '${topic}':`, error);
+      console.error('Failed to create topic %s:', topic, error);
       // Rethrow if it's not a "topic already exists" error
       throw error; 
     }

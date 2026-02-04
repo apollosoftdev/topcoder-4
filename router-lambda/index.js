@@ -47,7 +47,7 @@ const isChallengeActive = async (challengeId) => {
     console.log(`Challenge ${challengeId} active status: ${isActive}`);
     return isActive;
   } catch (error) {
-    console.error(`Error checking challenge status for ${challengeId}:`, error);
+    console.error('Error checking challenge status for %s:', challengeId, error);
     return false;
   }
 };
@@ -127,7 +127,7 @@ const processRecord = async (record) => {
     console.log(`Successfully routed submission ${submissionId} for challenge ${challengeId}`);
     return { success: true, itemIdentifier };
   } catch (error) {
-    console.error(`Error processing record ${itemIdentifier}:`, error);
+    console.error('Error processing record %s:', itemIdentifier, error);
     return { success: false, itemIdentifier };
   }
 };

@@ -45,7 +45,7 @@ const loadChallengeConfig = async () => {
   const response = await ssm.send(command);
   challengeConfigCache = JSON.parse(response.Parameter.Value);
 
-  console.log(`Loaded challenge config for ${config.challengeId}:`, JSON.stringify(challengeConfigCache, null, 2));
+  console.log('Loaded challenge config for %s: %s', config.challengeId, JSON.stringify(challengeConfigCache, null, 2));
   return challengeConfigCache;
 };
 
@@ -66,7 +66,7 @@ const loadScorerConfig = async (scorerType) => {
   const response = await ssm.send(command);
   scorerConfigsCache[scorerType] = JSON.parse(response.Parameter.Value);
 
-  console.log(`Loaded scorer config for ${scorerType}:`, JSON.stringify(scorerConfigsCache[scorerType], null, 2));
+  console.log('Loaded scorer config for %s: %s', scorerType, JSON.stringify(scorerConfigsCache[scorerType], null, 2));
   return scorerConfigsCache[scorerType];
 };
 
@@ -224,7 +224,7 @@ const processRecord = async (record) => {
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length > 0) {
       console.error(`${failures.length} out of ${taskPromises.length} task launches failed`);
-      failures.forEach((f, idx) => console.error(`Task ${idx} launch failed:`, f.reason));
+      failures.forEach((f, idx) => console.error('Task %d launch failed:', idx, f.reason));
 
       // If all launches failed, report failure
       if (failures.length === taskPromises.length) {
@@ -235,7 +235,7 @@ const processRecord = async (record) => {
     console.log(`Successfully launched ${taskPromises.length - failures.length} ECS tasks for submission ${submissionId}`);
     return { success: true, messageId };
   } catch (error) {
-    console.error(`Error processing message ${messageId}:`, error);
+    console.error('Error processing message %s:', messageId, error);
     return { success: false, messageId };
   }
 };

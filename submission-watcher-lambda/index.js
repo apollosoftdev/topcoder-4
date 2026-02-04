@@ -140,7 +140,7 @@ async function updateSubmissionStatus(submissionId, status, accessToken, submiss
     );
     console.log(`Updated submission ${submissionId} status to ${status}: HTTP ${response.status}`);
   } catch (error) {
-    console.error(`Failed to update submission ${submissionId} status to ${status}:`, error.response?.data || error.message);
+    console.error('Failed to update submission %s status to %s:', submissionId, status, error.response?.data || error.message);
     throw error;
   }
 }
@@ -187,7 +187,7 @@ exports.handler = async (event) => {
   const failedTasks = results.filter(result => result.status === 'rejected');
   if (failedTasks.length > 0) {
     failedTasks.forEach((result, idx) => {
-      console.error(`Scorer task ${idx} failed:`, result.reason);
+      console.error('Scorer task %d failed:', idx, result.reason);
     });
     console.error('All failed task results:', JSON.stringify(failedTasks, null, 2));
     throw new Error(`${failedTasks.length} out of ${promises.length} scorer tasks failed.`);

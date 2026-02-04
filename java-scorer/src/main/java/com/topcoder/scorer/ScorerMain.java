@@ -8,9 +8,12 @@ import com.topcoder.scorer.models.ScoringResult;
 import com.topcoder.scorer.models.PhaseConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -21,6 +24,15 @@ import org.apache.http.util.EntityUtils;
  * Main entry point for the Java scorer. Orchestrates loading config, running the scorer, and posting the review.
  */
 public class ScorerMain {
+    /**
+     * Whitelist of allowed tester classes for security.
+     * Only classes in this list can be loaded via reflection.
+     */
+    private static final Set<String> ALLOWED_TESTER_CLASSES = new HashSet<>(Arrays.asList(
+        "com.topcoder.challenges.mm160.BioSlimeTester"
+        // Add more allowed tester classes here as needed
+    ));
+
     public static void main(String[] args) {
         String submissionDir = null;
         try {
@@ -170,7 +182,11 @@ public class ScorerMain {
      * @throws Exception if scoring fails
      */
     private static double runScoring(String testerClassName, String submissionDir, ScorerConfig scorerConfig) throws Exception {
-        Class<?> testerClass = Class.forName(testerClassName);
+        // Validate tester class against whitelist to prevent unsafe reflection
+        if (!ALLOWED_TESTER_CLASSES.contains(testerClassName)) {
+            throw new SecurityException("Tester class not in whitelist: " + testerClassName);
+        }
+        Class<?> testerClass = Class.forName(testerClassName); // nosemgrep: unsafe-reflection
         Method runTester = testerClass.getMethod("runTester", String.class, ScorerConfig.class);
         return (double) runTester.invoke(null, submissionDir, scorerConfig);
     }

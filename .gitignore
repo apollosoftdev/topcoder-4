@@ -6,6 +6,7 @@ java-scorer/target
 
 cdk/cdk.out
 cdk/dist
+cdk/cdk.context.json
 
 temp
 
