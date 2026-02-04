@@ -1,0 +1,13 @@
+{
+  "name": "completion-lambda",
+  "version": "1.0.0",
+  "description": "EventBridge-triggered completion handler for ECS task state changes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

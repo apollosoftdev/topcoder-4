@@ -1,3 +1,9 @@
+// Challenge configuration for fan-out architecture
+export interface ChallengeConfig {
+  challengeId: string;
+  challengeName: string;
+}
+
 // Interface for the configuration structure
 export interface AppConfig {
   submissionApiUrl: string;
@@ -27,10 +33,37 @@ export interface AppConfig {
   ecsTaskRoleArn: string;
   // Dev configuration
   devChallengeId: string;            // UUID format expected
+  // Fan-out architecture configuration
+  snsTopicName: string;
+  challengeMappingTableName: string;
+  ecsTaskStateRuleName: string;
+  sqsVisibilityTimeoutSeconds: string;
+  sqsMessageRetentionDays: string;
+  sqsMaxReceiveCount: string;
+  dlqRetentionDays: string;
+  challenges: ChallengeConfig[];
 }
 
 // Function to load configuration from environment variables and file
 function loadConfig(): AppConfig {
+  // Parse challenges from environment variable (JSON array)
+  let challenges: ChallengeConfig[] = [];
+  if (process.env.CHALLENGES) {
+    try {
+      challenges = JSON.parse(process.env.CHALLENGES);
+    } catch (e) {
+      console.error('Failed to parse CHALLENGES environment variable:', e);
+    }
+  }
+
+  // Default challenge config for dev
+  const devChallengeId = process.env.DEV_CHALLENGE_ID || '00000000-0000-0000-0000-000000000000';
+  if (challenges.length === 0) {
+    challenges = [
+      { challengeId: devChallengeId, challengeName: 'BioSlime' },
+    ];
+  }
+
   return {
     submissionApiUrl: process.env.SUBMISSION_API_URL || 'https://api.topcoder-dev.com/v5',
     reviewScorecardId: process.env.REVIEW_SCORECARD_ID || '30001852',
@@ -58,7 +91,16 @@ function loadConfig(): AppConfig {
     ecsTaskExecutionRoleArn: process.env.ECS_TASK_EXECUTION_ROLE_ARN || '',
     ecsTaskRoleArn: process.env.ECS_TASK_ROLE_ARN || '',
     // Dev configuration
-    devChallengeId: process.env.DEV_CHALLENGE_ID || '00000000-0000-0000-0000-000000000000',
+    devChallengeId: devChallengeId,
+    // Fan-out architecture configuration
+    snsTopicName: process.env.SNS_TOPIC_NAME || 'submission-fanout-topic',
+    challengeMappingTableName: process.env.CHALLENGE_MAPPING_TABLE_NAME || 'challenge-queue-mapping',
+    ecsTaskStateRuleName: process.env.ECS_TASK_STATE_RULE_NAME || 'ecs-task-state-change-rule',
+    sqsVisibilityTimeoutSeconds: process.env.SQS_VISIBILITY_TIMEOUT_SECONDS || '120',
+    sqsMessageRetentionDays: process.env.SQS_MESSAGE_RETENTION_DAYS || '7',
+    sqsMaxReceiveCount: process.env.SQS_MAX_RECEIVE_COUNT || '3',
+    dlqRetentionDays: process.env.DLQ_RETENTION_DAYS || '14',
+    challenges: challenges,
   };
 }
 
