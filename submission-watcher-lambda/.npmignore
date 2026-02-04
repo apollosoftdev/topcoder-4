@@ -1,0 +1,33 @@
+# Development files
+*.ts
+tsconfig.json
+jest.config.js
+.env*
+
+# Test files
+__tests__/
+*.test.js
+*.spec.js
+
+# Documentation
+README.md
+*.md
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+
+# Build artifacts
+dist/
+build/

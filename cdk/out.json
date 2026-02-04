@@ -1,0 +1,1 @@
+{"statusCode":200,"body":"{\"message\":\"Message published successfully\",\"result\":[{\"topicName\":\"submission.notification.create\",\"partition\":1,\"errorCode\":0,\"baseOffset\":\"1\",\"logAppendTime\":\"-1\",\"logStartOffset\":\"0\"}]}"}

@@ -1,0 +1,11 @@
+{
+  "name": "lambda-publisher",
+  "version": "1.0.0",
+  "description": "Lambda function to publish messages to Kafka",
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "@aws-sdk/client-kafka": "^3.0.0"
+  }
+} 

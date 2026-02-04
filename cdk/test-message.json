@@ -1,0 +1,14 @@
+{
+  "topic": "submission.notification.create",
+  "originator": "some-service",
+  "timestamp": "2024-07-27T12:00:00Z",
+  "mime-type": "application/json",
+  "payload": {
+    "resource": "submission",
+    "submissionId": "41179883-a06e-4566-a2c4-bdb0356c75c9",
+    "challengeId": 30096756,
+    "memberId": 100000131,
+    "submissionTime": "2025-06-20T08:22:52.234Z",
+    "submissionUrl": "s3://some-bucket/path/to/submission.zip"
+  }
+}

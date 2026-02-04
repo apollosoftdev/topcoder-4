@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Enterprise CDK Bootstrap Resources - Deploy via StackSet'
+
+Parameters:
+  Qualifier:
+    Type: String
+    Default: 'hnb659fds'
+    Description: 'Unique identifier for this bootstrap stack'
+  
+  CloudFormationExecutionPolicyArn:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/PowerUserAccess'
+    Description: 'Managed policy ARN for CloudFormation execution role'
+
+Resources:
+  # S3 Bucket for Assets
+  CDKAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cdk-${Qualifier}-assets-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: Purpose
+          Value: CDK-Bootstrap
+
+  # ECR Repository for Container Images
+  CDKContainerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'cdk-${Qualifier}-container-assets-${AWS::AccountId}-${AWS::Region}'
+      ImageTagMutability: IMMUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Expire untagged images after 365 days",
+              "selection": {
+                "tagStatus": "untagged",
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": 365
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: Purpose
+          Value: CDK-Bootstrap
+
+  # CloudFormation Execution Role
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'cdk-${Qualifier}-cfn-exec-role-${AWS::AccountId}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CloudFormationExecutionPolicyArn
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: aws-cdk:bootstrap-role
+          Value: cfn-exec
+
+  # Deployment Role
+  DeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'cdk-${Qualifier}-deploy-role-${AWS::AccountId}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: DeploymentPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                  - ssm:GetParameter*
+                Resource: '*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CloudFormationExecutionRole.Arn
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: aws-cdk:bootstrap-role
+          Value: deploy
+
+  # File Publishing Role
+  FilePublishingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'cdk-${Qualifier}-file-publishing-role-${AWS::AccountId}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: FilePublishingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                  - s3:DeleteObject*
+                  - s3:PutObject*
+                  - s3:Abort*
+                Resource:
+                  - !GetAtt CDKAssetsBucket.Arn
+                  - !Sub '${CDKAssetsBucket.Arn}/*'
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: aws-cdk:bootstrap-role
+          Value: file-publishing
+
+  # Image Publishing Role
+  ImagePublishingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'cdk-${Qualifier}-image-publishing-role-${AWS::AccountId}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: ImagePublishingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeImages
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: !GetAtt CDKContainerRepository.Arn
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+      Tags:
+        - Key: ManagedBy
+          Value: CloudFormation-StackSet
+        - Key: aws-cdk:bootstrap-role
+          Value: image-publishing
+
+  # SSM Parameter for Bootstrap Version
+  BootstrapVersionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/cdk-bootstrap/${Qualifier}/version'
+      Type: String
+      Value: '27'
+      Description: 'CDK Bootstrap version'
+      Tags:
+        ManagedBy: CloudFormation-StackSet
+        Purpose: CDK-Bootstrap
+
+Outputs:
+  BucketName:
+    Description: 'S3 Bucket for CDK Assets'
+    Value: !Ref CDKAssetsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  RepositoryName:
+    Description: 'ECR Repository for Container Assets'
+    Value: !Ref CDKContainerRepository
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryName'
+
+  CloudFormationExecutionRoleArn:
+    Description: 'CloudFormation Execution Role ARN'
+    Value: !GetAtt CloudFormationExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CfnExecRoleArn'
+
+  DeploymentRoleArn:
+    Description: 'Deployment Role ARN'
+    Value: !GetAtt DeploymentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DeployRoleArn'

@@ -1,0 +1,96 @@
+version: 2.1
+
+parameters:
+  reset-db:
+    type: boolean
+    default: false
+
+defaults: &defaults
+    docker:
+        - image: cimg/node:25.4.0
+
+install_dependencies: &install_dependencies
+    name: Install Dependencies
+    command: |
+        sudo apt update
+        ARCH=$(uname -m)
+        if [ "$ARCH" == "x86_64" ]; then
+            URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+        elif [ "$ARCH" == "aarch64" ]; then
+            URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+        else
+            echo "Unsupported architecture: $ARCH"
+            exit 1
+        fi
+        curl "$URL" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+        sudo apt install openjdk-25-jdk
+        sudo apt install maven
+
+
+install_deploy_scripts: &install_deploy_scripts
+    name: Install Deployment Scripts
+    command: |
+        git clone --branch v1.4.19 https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
+        cp ../buildscript/master_deploy.sh .
+        cp ../buildscript/buildenv.sh .
+        cp ../buildscript/awsconfiguration.sh .
+        cp ../buildscript/psvar-processor.sh .
+
+
+build_and_deploy_steps: &build_and_deploy_steps
+    - checkout
+    - setup_remote_docker
+    - run: *install_dependencies
+    - run: *install_deploy_scripts
+    - run:
+          name: Build Docker Image
+          command: |
+              sudo npm install -g aws-cdk
+    - deploy:
+          name: Deploy Using MasterScript
+          command: |
+              ./awsconfiguration.sh $DEPLOY_ENV
+              source awsenvconf
+              ./psvar-processor.sh -t appenv -p /config/${APPNAME}/deployvar
+              source deployvar_env
+              # ./deploy.sh
+              # ./master_deploy.sh -d ECS -e $DEPLOY_ENV -t latest -j /config/${APPNAME}/appvar -i ${APPNAME} -p FARGATE
+
+jobs:
+    build-dev:
+        <<: *defaults
+        environment:
+            DEPLOY_ENV: 'DEV'
+            LOGICAL_ENV: 'dev'
+            APPNAME: 'tc-mm-processor-lambda'
+            DEPLOYMENT_ENVIRONMENT: 'dev'
+        steps: *build_and_deploy_steps
+
+    build-prod:
+        <<: *defaults
+        environment:
+            DEPLOY_ENV: 'PROD'
+            LOGICAL_ENV: 'prod'
+            APPNAME: 'tc-mm-processor-lambda'
+            DEPLOYMENT_ENVIRONMENT: 'prod'
+        steps: *build_and_deploy_steps
+
+workflows:
+    version: 2
+    build:
+        jobs:
+            - 'build-dev':
+                  context: org-global
+                  filters:
+                      branches:
+                          only:
+                              - dev
+
+            - 'build-prod':
+                  context: org-global
+                  filters:
+                      branches:
+                          only:
+                              - master
