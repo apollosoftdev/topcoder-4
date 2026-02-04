@@ -6,7 +6,6 @@
   "workspaces": [
     "cdk",
     "router-lambda",
-    "challenge-processor-lambda",
     "completion-lambda",
     "submission-watcher-lambda",
     "test-data-sender-lambda"

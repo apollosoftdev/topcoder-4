@@ -1,8 +1,20 @@
 /**
  * Completion Lambda
  * Triggered by EventBridge when ECS tasks stop
- * Logs task completion status and extracts correlation tags
+ * Logs task completion status and retries failed tasks via SQS
  */
+
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+
+const sqs = new SQSClient();
+const dynamodb = new DynamoDBClient();
+
+// Configuration from environment variables
+const config = {
+  challengeMappingTable: process.env.CHALLENGE_MAPPING_TABLE,
+  maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
+};
 
 /**
  * Extract tags from ECS task as a key-value object
@@ -56,6 +68,95 @@ const isTaskSuccessful = (detail) => {
 };
 
 /**
+ * Get queue URL for a challenge from DynamoDB
+ * @param {string} challengeId - Challenge UUID
+ * @returns {Promise<string|null>} - Queue URL or null if not found
+ */
+const getQueueUrl = async (challengeId) => {
+  if (!config.challengeMappingTable) {
+    console.warn('CHALLENGE_MAPPING_TABLE not configured, cannot retry');
+    return null;
+  }
+
+  try {
+    const command = new GetItemCommand({
+      TableName: config.challengeMappingTable,
+      Key: {
+        challengeId: { S: challengeId },
+      },
+      ProjectionExpression: 'queueUrl',
+    });
+    const response = await dynamodb.send(command);
+
+    if (!response.Item || !response.Item.queueUrl) {
+      console.warn('No queue URL found for challenge %s', challengeId);
+      return null;
+    }
+
+    return response.Item.queueUrl.S;
+  } catch (error) {
+    console.error('Error fetching queue URL for challenge %s:', challengeId, error);
+    return null;
+  }
+};
+
+/**
+ * Send retry message to SQS
+ * @param {Object} params - Retry parameters
+ * @param {string} params.queueUrl - SQS queue URL
+ * @param {string} params.challengeId - Challenge UUID
+ * @param {string} params.submissionId - Submission UUID
+ * @param {string} params.scorerType - Scorer type
+ * @param {number} params.retryCount - Current retry count (will be incremented)
+ * @returns {Promise<boolean>} - True if message sent successfully
+ */
+const sendRetryMessage = async ({ queueUrl, challengeId, submissionId, scorerType, retryCount }) => {
+  const newRetryCount = retryCount + 1;
+
+  if (newRetryCount >= config.maxRetries) {
+    console.error('Max retries (%d) reached for submission %s, scorer %s. Not retrying.', config.maxRetries, submissionId, scorerType);
+    return false;
+  }
+
+  try {
+    const message = {
+      payload: {
+        challengeId,
+        submissionId,
+        scorerType,
+      },
+      retryInfo: {
+        retryCount: newRetryCount,
+        retriedAt: new Date().toISOString(),
+        reason: 'ECS task failed',
+      },
+    };
+
+    const command = new SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify(message),
+      MessageAttributes: {
+        RetryCount: {
+          DataType: 'Number',
+          StringValue: String(newRetryCount),
+        },
+        ScorerType: {
+          DataType: 'String',
+          StringValue: scorerType,
+        },
+      },
+    });
+
+    await sqs.send(command);
+    console.log('Sent retry message for submission %s, scorer %s (retry %d)', submissionId, scorerType, newRetryCount);
+    return true;
+  } catch (error) {
+    console.error('Failed to send retry message for submission %s:', submissionId, error);
+    return false;
+  }
+};
+
+/**
  * Lambda handler for EventBridge ECS Task State Change events
  * @param {Object} event - EventBridge event
  * @returns {Promise<Object>} - Processing result
@@ -68,7 +169,7 @@ exports.handler = async (event) => {
     const detail = event.detail || {};
     const taskArn = detail.taskArn;
     const clusterArn = detail.clusterArn;
-    const lastStatus = detail.lastStatus;
+    // lastStatus is always 'STOPPED' when this handler is invoked (per EventBridge filter)
     const stoppedReason = detail.stoppedReason || 'No reason provided';
     const stoppedAt = detail.stoppedAt;
     const startedAt = detail.startedAt;
@@ -78,6 +179,7 @@ exports.handler = async (event) => {
     const challengeId = tags.ChallengeId || 'unknown';
     const submissionId = tags.SubmissionId || 'unknown';
     const scorerType = tags.ScorerType || 'unknown';
+    const retryCount = parseInt(tags.RetryCount || '0', 10);
 
     // Extract container exit information
     const containerInfo = extractContainerInfo(detail.containers);
@@ -100,6 +202,7 @@ exports.handler = async (event) => {
       challengeId,
       submissionId,
       scorerType,
+      retryCount,
       exitCode: containerInfo.exitCode,
       stoppedReason,
       containerName: containerInfo.name,
@@ -115,16 +218,28 @@ exports.handler = async (event) => {
       console.log('TASK_SUCCESS:', JSON.stringify(completionLog, null, 2));
     } else {
       console.error('TASK_FAILURE:', JSON.stringify(completionLog, null, 2));
-    }
 
-    // Future: Update submission status via API
-    // This would involve:
-    // 1. Getting an access token (similar to challenge-processor-lambda)
-    // 2. Calling the submission API to update status
-    // 3. Creating a review record if scoring succeeded
-    //
-    // For now, we just log the completion status
-    console.log(`(FUTURE) Would update submission ${submissionId} status based on task ${success ? 'success' : 'failure'}`);
+      // Attempt retry for failed tasks
+      if (challengeId !== 'unknown' && submissionId !== 'unknown') {
+        const queueUrl = await getQueueUrl(challengeId);
+        if (queueUrl) {
+          const retryQueued = await sendRetryMessage({
+            queueUrl,
+            challengeId,
+            submissionId,
+            scorerType,
+            retryCount,
+          });
+          if (retryQueued) {
+            console.log('Retry queued for failed task: submission %s, scorer %s', submissionId, scorerType);
+          } else {
+            console.error('Failed to queue retry for submission %s, scorer %s', submissionId, scorerType);
+          }
+        } else {
+          console.error('Cannot retry: no queue URL available for challenge %s', challengeId);
+        }
+      }
+    }
 
     return {
       statusCode: 200,
@@ -135,6 +250,7 @@ exports.handler = async (event) => {
         challengeId,
         submissionId,
         scorerType,
+        retryQueued: !success && retryCount < config.maxRetries - 1,
       }),
     };
   } catch (error) {

@@ -14,7 +14,6 @@ import { EventBridgeConstruct } from './eventbridge-construct';
 import {
   SubmissionWatcherLambdaConstruct,
   RouterLambdaConstruct,
-  ChallengeProcessorLambdaConstruct,
   CompletionLambdaConstruct,
 } from './lambda-constructs';
 
@@ -83,9 +82,18 @@ export class MatchScorerCdkStack extends cdk.Stack {
       dynamoDbTable: dynamoDbConstruct.table,
     });
 
+    // Collect all SQS queue ARNs for Completion Lambda permissions
+    const sqsQueueArns: string[] = [];
+    for (const [, mapping] of snsSqsConstruct.challengeQueues) {
+      sqsQueueArns.push(mapping.queue.queueArn);
+    }
+
     // --- Completion Lambda (must be created before EventBridge) ---
     const completionLambda = new CompletionLambdaConstruct(this, 'CompletionLambda', {
       lambdaCodePath: path.join(__dirname, '..', '..', 'completion-lambda'),
+      dynamoDbTable: dynamoDbConstruct.table,
+      sqsQueueArns: sqsQueueArns,
+      maxRetries: config.maxRetries,
       existingLambdaRoleArn: config.existingLambdaRoleArn,
     });
 
@@ -108,8 +116,8 @@ export class MatchScorerCdkStack extends cdk.Stack {
       existingLambdaRoleArn: config.existingLambdaRoleArn,
     });
 
-    // --- Challenge Processor Lambdas (one per challenge) ---
-    const challengeProcessorLambdas: ChallengeProcessorLambdaConstruct[] = [];
+    // --- Submission Watcher Lambdas (one per challenge, SQS-triggered) ---
+    const submissionWatcherLambdas: SubmissionWatcherLambdaConstruct[] = [];
     for (const challenge of config.challenges) {
       const queueMapping = snsSqsConstruct.challengeQueues.get(challenge.challengeId);
       if (!queueMapping) {
@@ -117,9 +125,9 @@ export class MatchScorerCdkStack extends cdk.Stack {
         continue;
       }
 
-      const processorLambda = new ChallengeProcessorLambdaConstruct(
+      const watcherLambda = new SubmissionWatcherLambdaConstruct(
         this,
-        `ChallengeProcessor-${challenge.challengeName}`,
+        `SubmissionWatcher-${challenge.challengeName}`,
         {
           vpc: vpcConstruct.vpc,
           vpcSecurityGroups: vpcConstruct.securityGroups,
@@ -139,39 +147,14 @@ export class MatchScorerCdkStack extends cdk.Stack {
             AUTH0_CLIENT_ID: config.auth0ClientId,
             AUTH0_CLIENT_SECRET: config.auth0ClientSecret,
             AUTH0_PROXY_URL: config.auth0ProxyUrl,
+            MAX_RETRIES: config.maxRetries,
           },
-          lambdaCodePath: path.join(__dirname, '..', '..', 'challenge-processor-lambda'),
+          lambdaCodePath: path.join(__dirname, '..', '..', 'submission-watcher-lambda'),
           existingLambdaRoleArn: config.existingLambdaRoleArn,
         }
       );
-      challengeProcessorLambdas.push(processorLambda);
+      submissionWatcherLambdas.push(watcherLambda);
     }
-
-    // --- Legacy Submission Watcher Lambda (kept for reference/fallback) ---
-    const submissionWatcherLambda = new SubmissionWatcherLambdaConstruct(this, 'SubmissionWatcherLambda', {
-        vpc: vpcConstruct.vpc,
-        vpcSecurityGroups: vpcConstruct.securityGroups,
-        mskSecurityGroup: mskConstruct.mskSecurityGroup,
-        mskClusterArn: mskConstruct.mskClusterArn,
-        ecsClusterName: ecsConstruct.cluster.clusterName,
-        ecsTaskDefinitionArn: ecsConstruct.taskDefinition.taskDefinitionArn,
-        ecsSubnetIds: vpcConstruct.privateSubnets.map(subnet => subnet.subnetId),
-        ecsTaskSecurityGroupId: ecsConstruct.taskSecurityGroup.securityGroupId,
-        ecsContainerName: ecsConstruct.container.containerName,
-        taskExecutionRoleArn: config.ecsTaskExecutionRoleArn,
-        taskRoleArn: config.ecsTaskRoleArn,
-        environmentVariables: {
-            TASK_TIMEOUT_SECONDS: config.taskTimeoutSeconds,
-            MAX_RETRIES: config.maxRetries,
-            AUTH0_URL: config.auth0Url,
-            AUTH0_AUDIENCE: config.auth0Audience,
-            AUTH0_CLIENT_ID: config.auth0ClientId,
-            AUTH0_CLIENT_SECRET: config.auth0ClientSecret,
-            AUTH0_PROXY_URL: config.auth0ProxyUrl,
-        },
-        lambdaCodePath: path.join(__dirname, '..', '..', 'submission-watcher-lambda'),
-        existingLambdaRoleArn: config.existingLambdaRoleArn
-    });
 
     // --- Outputs (Base Infrastructure) ---
     new cdk.CfnOutput(this, 'EcsClusterArn', {
@@ -182,11 +165,6 @@ export class MatchScorerCdkStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'EcsTaskDefinitionArn', {
       value: ecsConstruct.taskDefinition.taskDefinitionArn,
       description: 'ARN of the ECS task definition',
-    });
-
-    new cdk.CfnOutput(this, 'WatcherLambdaFunctionArn', {
-      value: submissionWatcherLambda.lambdaFunction.functionArn,
-      description: 'ARN of the Submission Watcher Lambda function (legacy)',
     });
 
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {
@@ -230,16 +208,16 @@ export class MatchScorerCdkStack extends cdk.Stack {
       description: 'EventBridge rule name for ECS task state changes',
     });
 
-    // Output challenge processor Lambda ARNs
-    challengeProcessorLambdas.forEach((processor, index) => {
-      new cdk.CfnOutput(this, `ChallengeProcessorLambdaArn${index}`, {
-        value: processor.lambdaFunction.functionArn,
-        description: `ARN of Challenge Processor Lambda for ${config.challenges[index]?.challengeName}`,
+    // Output submission watcher Lambda ARNs
+    submissionWatcherLambdas.forEach((watcher, index) => {
+      new cdk.CfnOutput(this, `SubmissionWatcherLambdaArn${index}`, {
+        value: watcher.lambdaFunction.functionArn,
+        description: `ARN of Submission Watcher Lambda for ${config.challenges[index]?.challengeName}`,
       });
     });
 
     // Output SQS queue URLs for each challenge
-    for (const [_challengeId, mapping] of snsSqsConstruct.challengeQueues) {
+    for (const [, mapping] of snsSqsConstruct.challengeQueues) {
       const sanitizedName = mapping.challengeName.replace(/[^a-zA-Z0-9-]/g, '-');
       new cdk.CfnOutput(this, `SqsQueueUrl-${sanitizedName}`, {
         value: mapping.queue.queueUrl,
