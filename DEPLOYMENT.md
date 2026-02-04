@@ -236,18 +236,24 @@ npm install
 
 ### 3. Configure Environment Variables
 
-The application uses environment variables for runtime configuration. You can set these in your shell or create a `.env` file.
+The application uses environment variables for runtime configuration. Create a `.env` file in the **project root**:
+
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit with your values
+nano .env  # or use your preferred editor
+```
 
 #### Infrastructure Configuration (MSK & VPC)
 
 **Using Existing Infrastructure** (Recommended if you already have MSK and VPC):
 
 ```bash
-# Use existing MSK cluster (required)
-export EXISTING_MSK_CLUSTER_ARN="arn:aws:kafka:us-east-1:123456789012:cluster/your-msk-cluster/uuid"
-
-# Use existing VPC (required)
-export EXISTING_VPC_ID="vpc-0123456789abcdef0"
+# In your .env file:
+EXISTING_MSK_CLUSTER_ARN="arn:aws:kafka:us-east-1:123456789012:cluster/your-msk-cluster/uuid"
+EXISTING_VPC_ID="vpc-0123456789abcdef0"
 ```
 
 **⚠️ Important Notes:**

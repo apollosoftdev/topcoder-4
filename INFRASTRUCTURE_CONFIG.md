@@ -61,25 +61,27 @@ If you already have an MSK cluster and VPC, you can reuse them instead of creati
 
 5. **Set Environment Variables**:
    ```bash
-   cd codebase/cdk
-   
-   # Copy example config
+   # From project root directory
    cp .env.example .env
-   
+
    # Edit .env file and set:
-   export EXISTING_MSK_CLUSTER_ARN="arn:aws:kafka:us-east-1:123456789012:cluster/your-cluster/uuid"
-   export EXISTING_VPC_ID="vpc-0123456789abcdef0"
-   
+   EXISTING_MSK_CLUSTER_ARN="arn:aws:kafka:us-east-1:123456789012:cluster/your-cluster/uuid"
+   EXISTING_VPC_ID="vpc-0123456789abcdef0"
+
    # Optional: Specify exact subnets to use
-   export EXISTING_PRIVATE_SUBNET_IDS="subnet-priv1,subnet-priv2"
-   
+   EXISTING_PRIVATE_SUBNET_IDS="subnet-priv1,subnet-priv2"
+
    # Optional: Specify security groups for Lambda/ECS
-   export EXISTING_SECURITY_GROUP_IDS="sg-xxxxxxxx,sg-yyyyyyyy"
-   
+   EXISTING_SECURITY_GROUP_IDS="sg-xxxxxxxx,sg-yyyyyyyy"
+
    # Required: Auth0 credentials
-   export AUTH0_CLIENT_ID="your-client-id"
-   export AUTH0_CLIENT_SECRET="your-secret"
-   
+   AUTH0_CLIENT_ID="your-client-id"
+   AUTH0_CLIENT_SECRET="your-secret"
+
+   # Required: ECS IAM roles
+   ECS_TASK_EXECUTION_ROLE_ARN="arn:aws:iam::123456789012:role/your-execution-role"
+   ECS_TASK_ROLE_ARN="arn:aws:iam::123456789012:role/your-task-role"
+
    # Load variables
    source .env
    ```

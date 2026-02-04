@@ -12,17 +12,20 @@
     "test-data-sender-lambda"
   ],
   "scripts": {
-    "build": "npm run build -w cdk",
-    "build:cdk": "npm run build -w cdk",
-    "synth": "npm run synth -w cdk",
-    "deploy": "npm run deploy -w cdk",
-    "destroy": "npm run destroy -w cdk",
-    "diff": "npm run diff -w cdk",
+    "build": "dotenv -- npm run build -w cdk",
+    "build:cdk": "dotenv -- npm run build -w cdk",
+    "synth": "dotenv -- npm run synth -w cdk",
+    "deploy": "dotenv -- npm run deploy -w cdk",
+    "destroy": "dotenv -- npm run destroy -w cdk",
+    "diff": "dotenv -- npm run diff -w cdk",
     "test": "npm run test -w cdk",
     "lint": "npm run lint -w cdk",
     "lint:fix": "npm run lint:fix -w cdk",
     "clean": "rm -rf node_modules */node_modules */*/node_modules",
     "clean:install": "npm run clean && npm install"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.2"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -8,3 +8,7 @@ cdk/cdk.out
 cdk/dist
 
 temp
+
+# Environment files (contain secrets)
+.env
+!.env.example
