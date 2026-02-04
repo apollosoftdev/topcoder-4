@@ -23,13 +23,17 @@
     "test:watcher": "npm run test -w submission-watcher-lambda",
     "test:completion": "npm run test -w completion-lambda",
     "test:all": "npm run test && npm run test:lambdas",
+    "test:integration": "node scripts/integration-test.js",
+    "test:integration:failure": "node scripts/integration-test.js --test-failure",
+    "test:integration:verbose": "node scripts/integration-test.js --verbose",
     "lint": "npm run lint -w cdk",
     "lint:fix": "npm run lint:fix -w cdk",
     "clean": "rm -rf node_modules */node_modules */*/node_modules",
     "clean:install": "npm run clean && npm install"
   },
   "devDependencies": {
-    "dotenv-cli": "^7.4.2"
+    "dotenv-cli": "^7.4.2",
+    "chalk": "^4.1.2"
   },
   "engines": {
     "node": ">=20.0.0"
