@@ -32,7 +32,9 @@ export class DynamoDbConstruct extends Construct {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For POC only
-      pointInTimeRecovery: false, // Enable for production
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false, // Enable for production
+      },
     });
   }
 }
