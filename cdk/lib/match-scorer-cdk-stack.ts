@@ -239,7 +239,7 @@ export class MatchScorerCdkStack extends cdk.Stack {
     });
 
     // Output SQS queue URLs for each challenge
-    for (const [challengeId, mapping] of snsSqsConstruct.challengeQueues) {
+    for (const [_challengeId, mapping] of snsSqsConstruct.challengeQueues) {
       const sanitizedName = mapping.challengeName.replace(/[^a-zA-Z0-9-]/g, '-');
       new cdk.CfnOutput(this, `SqsQueueUrl-${sanitizedName}`, {
         value: mapping.queue.queueUrl,
